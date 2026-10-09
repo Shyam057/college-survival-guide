@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>College Survival Guide</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: Arial, Helvetica, sans-serif; background: #fdf3ff; color: #2b2b3a; line-height: 1.5; }
+  header { background: #2f6f73; border-bottom: 4px solid #25b058; color: #fff; text-align: center; padding: 18px 12px; }
+  header h1 { margin: 0; font-size: 1.8rem; }
+  header p { margin: 4px 0 10px; }
+  .stats { display: flex; justify-content: center; gap: 18px; flex-wrap: wrap; font-size: .95rem; }
+  .bar { max-width: 420px; margin: 10px auto 0; height: 14px; background: rgba(255,255,255,.3); border-radius: 7px; overflow: hidden; }
+  .bar div { height: 100%; width: 0; background: #3ddc84; transition: width .4s; }
+  main { max-width: 760px; margin: 0 auto; padding: 14px; }
+  .screen { display: none; }
+  .screen.active { display: block; }
+  .panel { background: #fff; border: 1px solid #e6d8f5; border-top: 6px solid #e0489b; border-radius: 10px; padding: 18px; margin-bottom: 14px; }
+  .panel h2, .panel h3 { color: #6a2fc4; margin-top: 0; }
+  button { font-family: inherit; font-size: 1rem; cursor: pointer; }
+  button:focus-visible { outline: 3px solid #ff8a3d; outline-offset: 2px; }
+  .btn { background: #7b3fe4; color: #fff; border: none; border-radius: 6px; padding: 10px 18px; margin: 6px 6px 0 0; }
+  .btn:hover { background: #e0489b; }
+  .btn.alt { background: #fff; color: #7b3fe4; border: 2px solid #7b3fe4; }
+  .btn.alt:hover { background: #f3ecff; }
+  .stats span { background: rgba(255,255,255,.15); padding: 3px 12px; border-radius: 4px; }
+
+  /* ---- level map ---- */
+  #hint { text-align: center; min-height: 26px; font-weight: bold; color: #c2307f; margin: 4px 0; }
+  #map { position: relative; margin: 0 auto; max-width: 520px; border-radius: 16px; border: 3px solid #fff;
+         background: linear-gradient(#bfe9ff 0%, #e4f7ff 45%, #d4f5c9 100%); box-shadow: 0 2px 8px rgba(120,60,180,.2); }
+  #path { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; }
+  .level { box-shadow: 0 3px 0 rgba(0,0,0,.18); position: absolute; width: 74px; height: 74px; border-radius: 50%; border: 4px solid #fff; color: #fff;
+           font-size: 1.5rem; font-weight: bold; transform: translate(-50%, -50%); transition: transform .15s; }
+  .level small { display: block; font-size: .8rem; line-height: 1; }
+  .level.done { background: #25b058; }
+  .level.current { background: #ff8a00; animation: pulse 1.6s infinite; }
+  .level.locked { background: #9aa0a6; cursor: not-allowed; }
+  .level:not(:disabled):hover { transform: translate(-50%, -50%) scale(1.1); }
+  @keyframes pulse { 50% { box-shadow: 0 0 0 10px rgba(245,124,0,.25); } }
+  .lbl { position: absolute; transform: translate(-50%, 0); font-size: .75rem; font-weight: bold; color: #5a2d91; text-align: center; width: 110px; pointer-events: none; }
+
+  /* ---- Lesson and quiz ---- */
+  .tip-list li { margin-bottom: 6px; }
+  .tip-list li:nth-child(1)::marker { color: #e0489b; }
+  .tip-list li:nth-child(2)::marker { color: #ff8a3d; }
+  .tip-list li:nth-child(3)::marker { color: #25b058; }
+  .example { background: #fff3e0; border-left: 5px solid #ff8a3d; padding: 10px 12px; border-radius: 4px; }
+  .choice { display: block; width: 100%; text-align: left; background: #fff; border: 2px solid #d9c6f2; border-radius: 8px; padding: 10px 12px; margin: 8px 0; }
+  .choice:not(:disabled):hover { border-color: #7b3fe4; background: #f3ecff; }
+  .choice.right { border-color: #2e9e4f; background: #e6f5ea; }
+  .choice.wrong { border-color: #c62828; background: #fdeaea; }
+  .feedback { margin-top: 10px; padding: 10px 12px; border-radius: 6px; background: #f1f1f1; }
+  .feedback.good { background: #e6f5ea; }
+  .feedback.bad { background: #fdeaea; }
+  .big { font-size: 3.5rem; text-align: center; }
+  footer { text-align: center; font-size: .85rem; color: #6a4a8c; padding: 16px 10px 26px; }
+  @media (max-width: 480px) {
+    .level { width: 62px; height: 62px; font-size: 1.25rem; }
+    .lbl { width: 90px; font-size: .68rem; }
+    header h1 { font-size: 1.4rem; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>College Survival Guide</h1>
+  <p>Learn college skills, one level at a time.</p>
+  <div class="stats">
+    <span>Current level: <b id="curLevel">1</b></span>
+    <span>Completed: <b id="doneCount">0</b> / 10</span>
+  </div>
+  <div class="bar" role="progressbar" aria-label="Overall progress" aria-valuemin="0" aria-valuemax="100" id="progressBar"><div id="progressFill"></div></div>
+</header>
+
+<main>
+  <!-- MAP SCREEN -->
+  <section id="mapScreen" class="screen active">
+    <div class="panel">
+      <b>How to play:</b> Climb the ladder! Click the orange level, read the lesson, try the scenario, then pass the quiz (3 out of 5) to unlock the next rung. Green levels can be played again.
+    </div>
+    <div id="hint" aria-live="polite">Hover over or select a level to see its title.</div>
+    <div id="map"></div>
+    <p style="text-align:center"><button class="btn alt" id="resetBtn">Reset Progress</button></p>
+  </section>
+
+  <!-- LESSON SCREEN -->
+  <section id="lessonScreen" class="screen"></section>
+  <!-- QUIZ SCREEN -->
+  <section id="quizScreen" class="screen"></section>
+  <!-- RESULT SCREEN -->
+  <section id="resultScreen" class="screen"></section>
+  <!-- CHAMPION SCREEN -->
+  <section id="champScreen" class="screen">
+    <div class="panel">
+      <div class="big">🏆</div>
+      <h2 style="text-align:center">College Survival Champion!</h2>
+      <p style="text-align:center">You completed <b id="champCount">10</b> of 10 levels. Great work!</p>
+      <p style="text-align:center">
+        <button class="btn" id="playAgainBtn">Play Again</button>
+        <button class="btn alt" id="champMapBtn">Back to Map</button>
+      </p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  Developer: Shyam Kumar Bhattarai · Southeast Missouri State University<br>
+  CS630 — Human-Computer Interaction · Instructor: Dr. Amer · Fall 2026
+</footer>
+
+<script>
+/* ===== LEVEL DATA =====
+   all the lessons live here so they are easy to edit
+   t = title, intro = lesson text, tips = 3 tips, ex = example
+   sc = scenario (question + 3 choices with feedback, true = best choice)
+   qz = the 5 quiz questions (a = number of the right answer, starting at 0) */
+const LEVELS = [
+{ t:"Time Management", icon:"⏰",
+  intro:"College gives you more freedom than high school, so you must plan your own time. A simple weekly plan helps you balance classes, work, and rest.",
+  tips:["Write all classes, work shifts, and due dates in one calendar.","Do the most important task first each day.","Plan short breaks so you do not burn out."],
+  ex:"Maria has two classes, a part-time job, and a quiz on Friday. On Sunday she blocks study times in her calendar and finishes her quiz review by Thursday.",
+  sc:{q:"It is 8 PM. You have a paper due in 3 days, a quiz tomorrow, and friends invite you out. What do you do?",
+      c:[["Go out and study tomorrow morning.","Risky. A quiz tomorrow means you need to prepare tonight.",false],
+         ["Study for the quiz for 1 hour, then join your friends later.","Good balance! You handled the urgent task first and still had fun.",true],
+         ["Stay in and work on the paper all night.","The paper is not due for 3 days. The quiz is more urgent.",false]]},
+  qz:[{q:"What is the best first step in planning your week?",o:["Wait for deadlines","Write all classes and due dates in a calendar","Study only at night","Skip work shifts"],a:1,e:"A calendar with everything in one place shows you what is coming."},
+      {q:"Which task should you do first?",o:["The easiest task","The most important or urgent task","The longest task","Any task"],a:1,e:"Important and urgent tasks have the biggest effect on your grades."},
+      {q:"Why plan short breaks?",o:["They waste time","They help you stay focused and avoid burnout","They are only for weekends","They replace sleep"],a:1,e:"Short breaks help your brain rest so you can focus again."},
+      {q:"What does procrastination mean?",o:["Planning early","Delaying tasks until the last minute","Working in groups","Taking notes"],a:1,e:"Procrastination is putting off tasks, which often causes stress."},
+      {q:"When should you review your weekly plan?",o:["Never","Once a semester","At the start of each week","Only after exams"],a:2,e:"A quick weekly review keeps your plan up to date."}]},
+
+{ t:"Studying Effectively", icon:"📚",
+  intro:"Good studying is about how you study, not only how long. Active methods such as quizzing yourself work better than rereading notes.",
+  tips:["Study in short sessions (25–45 minutes) with breaks.","Test yourself with practice questions or flashcards.","Study in a quiet place without your phone."],
+  ex:"Jake used to reread his notes for hours. Now he makes flashcards and quizzes himself for 30 minutes a day, and his test scores went up.",
+  sc:{q:"You have a chapter to learn for next week. Which plan do you choose?",
+      c:[["Read the chapter once the night before the test.","Cramming makes it hard to remember things for long.",false],
+         ["Study 30 minutes a day and quiz yourself each time.","Excellent! Spaced practice and self-testing help memory the most.",true],
+         ["Highlight the whole chapter and reread it.","Highlighting feels productive but is a weak study method.",false]]},
+  qz:[{q:"Which study method is most effective?",o:["Rereading only","Self-testing with practice questions","Highlighting everything","Listening to music only"],a:1,e:"Active recall, like self-testing, builds stronger memory."},
+      {q:"Cramming the night before is usually...",o:["The best method","Not effective for long-term memory","Required","Fun and easy"],a:1,e:"Spreading study over several days works better than cramming."},
+      {q:"What is a good study session length?",o:["8 hours without breaks","25–45 minutes with breaks","2 minutes","Only at midnight"],a:1,e:"Short focused sessions keep your attention strong."},
+      {q:"Where should you study?",o:["In bed with the TV on","A quiet place with few distractions","In a loud cafeteria","Anywhere with your phone nearby"],a:1,e:"Fewer distractions means better focus."},
+      {q:"What are flashcards good for?",o:["Decoration","Practicing recall of key facts","Replacing class","Cheating"],a:1,e:"Flashcards force you to remember information on your own."}]},
+
+{ t:"Managing Money", icon:"💰",
+  intro:"Money skills protect you from stress. A simple budget shows how much you earn, how much you spend, and how much you can save.",
+  tips:["Make a monthly budget with needs first, wants second.","Save a small amount every month, even $10.","Track spending with an app or notebook."],
+  ex:"Lina gets $600 a month. Rent and food cost $450. She sets aside $30 for savings and keeps $120 for fun and school supplies.",
+  sc:{q:"Your paycheck arrives and you want new shoes for $90, but your phone bill ($40) is due. What do you do?",
+      c:[["Buy the shoes and pay the bill later.","Late bills can cause fees. Needs come before wants.",false],
+         ["Pay the phone bill first, then decide if you can afford the shoes.","Smart! Needs first, then wants with what is left.",true],
+         ["Put the shoes on a credit card.","Credit card debt grows with interest. Avoid it for wants.",false]]},
+  qz:[{q:"What is a budget?",o:["A loan","A plan for income and spending","A bank fee","A type of card"],a:1,e:"A budget is a plan that shows where your money goes."},
+      {q:"Which is a need?",o:["Concert tickets","Rent","Video game","Designer jacket"],a:1,e:"Rent is a basic need. The others are wants."},
+      {q:"Why save money regularly?",o:["To be ready for emergencies","To avoid learning","To spend more","There is no reason"],a:0,e:"Savings help you handle surprises like a car repair."},
+      {q:"What happens if you pay a bill late?",o:["Nothing","You may pay extra fees","You get a reward","The bill disappears"],a:1,e:"Late payments often add fees and can hurt your credit."},
+      {q:"What is a good way to track spending?",o:["Guess at the end of the year","Use a notebook or app","Ignore receipts","Ask a friend"],a:1,e:"Writing spending down shows where you can cut back."}]},
+
+{ t:"Finding Campus Resources", icon:"🏫",
+  intro:"Your campus offers many free services: the library, tutoring, a writing center, career services, health services, and counseling. Using them is a smart move, not a weakness.",
+  tips:["Visit the library early in the semester to learn its services.","Use tutoring or the writing center before grades drop.","Check the university website or ask an advisor if you do not know where to go."],
+  ex:"Sam struggled with a chemistry class. He visited the tutoring center twice a week and raised his grade from a D to a B.",
+  sc:{q:"You are stressed about choosing a major. Where do you go first?",
+      c:[["Ask nobody and guess.","Guessing can cost time and money.",false],
+         ["Make an appointment with an academic advisor or career services.","Correct! They are trained to help with exactly this.",true],
+         ["Drop all your classes.","That is too extreme and can hurt your progress.",false]]},
+  qz:[{q:"Who can help you pick classes for next semester?",o:["Academic advisor","Campus security","Cafeteria staff","Nobody"],a:0,e:"Advisors help plan your courses and graduation path."},
+      {q:"Where can you get help with writing a paper?",o:["Writing center","Gym","Parking office","Bookstore only"],a:0,e:"Writing centers give feedback on drafts."},
+      {q:"When should you use tutoring?",o:["Only after failing","As soon as you feel confused","Never","Only in the last week"],a:1,e:"Early help prevents small problems from growing."},
+      {q:"Is using campus resources a sign of weakness?",o:["Yes","No, it is a smart way to succeed","Only for freshmen","Only for failing students"],a:1,e:"Successful students use help often."},
+      {q:"Where can you find a list of campus services?",o:["University website","Random social media","Guessing","Nowhere"],a:0,e:"The official website lists services and contacts."}]},
+
+{ t:"Email Etiquette", icon:"📧",
+  intro:"Emails to professors and staff should be polite, clear, and short. Good emails get faster and better replies.",
+  tips:["Use a clear subject line, such as 'CS630 – Question about Project 2'.","Start with a greeting and end with your name.","Check spelling and keep the message short."],
+  ex:"Ava needed an extension. She wrote: 'Dear Dr. Lee, I am in your Monday class and I am sick this week. May I submit the assignment on Friday? Thank you, Ava Brown.'",
+  sc:{q:"Which opening is best for an email to your professor?",
+      c:[["'hey prof, need an extension lol'","Too casual for a professor.",false],
+         ["'Dear Professor Lee, I am in your Tuesday class. May I ask a question about the assignment?'","Great! It is polite and gives context.",true],
+         ["No greeting, just 'Extension?'","Too short. The professor will not know who you are or what you need.",false]]},
+  qz:[{q:"What should a good subject line be?",o:["Blank","Clear and specific","HELP!!!","Hi"],a:1,e:"A clear subject helps the reader understand your email quickly."},
+      {q:"How should you greet a professor?",o:["'Yo'","'Dear Professor Smith,'","'Hey you'","No greeting"],a:1,e:"A polite greeting shows respect."},
+      {q:"How long should a professional email be?",o:["Very long","Short and clear","One word","Ten pages"],a:1,e:"Busy readers prefer short, clear messages."},
+      {q:"What should you do before sending?",o:["Nothing","Proofread","Add many emojis","Use ALL CAPS"],a:1,e:"Proofreading catches mistakes."},
+      {q:"Why use your university email?",o:["It looks professional","It is required for fun","It is slower","No reason"],a:0,e:"A school email looks professional and is easy to recognize."}]},
+
+{ t:"Group Projects", icon:"🤝",
+  intro:"Group work teaches teamwork, but it can be stressful. Clear roles, deadlines, and regular communication keep everyone on track.",
+  tips:["Share contact information on the first day.","Divide tasks and write down who does what.","Set a mini deadline before the real one."],
+  ex:"A team of four built a presentation. They made a shared document, assigned one section to each person, and met for 15 minutes twice a week.",
+  sc:{q:"One teammate has not answered messages for three days. What do you do?",
+      c:[["Do all their work silently.","This is unfair and teaches nothing.",false],
+         ["Send a friendly message with the task and deadline. If no reply, tell the instructor.","Right! Communicate first, then ask for help if needed.",true],
+         ["Complain about them on social media.","Public complaints hurt the team and are unprofessional.",false]]},
+  qz:[{q:"What should a team do first?",o:["Share contact info and set roles","Wait","Argue","Work alone"],a:0,e:"Roles and contact details prevent confusion."},
+      {q:"Why write down who does each task?",o:["To avoid confusion","To waste time","To blame people","No reason"],a:0,e:"Clear tasks make everyone responsible."},
+      {q:"What is a good way to meet deadlines?",o:["Set mini deadlines","Do everything the last night","Ignore the plan","Skip meetings"],a:0,e:"Smaller deadlines catch problems early."},
+      {q:"A teammate disagrees with you. What is best?",o:["Listen and discuss respectfully","Shout","Leave the group","Ignore them"],a:0,e:"Respectful discussion leads to better ideas."},
+      {q:"Which tool helps teams share work?",o:["A shared online document","Paper only","Memory","Nothing"],a:0,e:"Shared documents let everyone see the latest version."}]},
+
+{ t:"Preparing for Exams", icon:"📝",
+  intro:"Exam success starts days before the test. Make a plan, review in small pieces, practice with old questions, and sleep well.",
+  tips:["Start reviewing at least one week early.","Practice with old quizzes or sample questions.","Sleep 7–8 hours the night before."],
+  ex:"Noah has a final in 7 days. He lists the topics, studies two topics a day, takes a practice test on day 6, and goes to bed early on day 7.",
+  sc:{q:"Your exam is in 5 days. You have 5 chapters to review. What is the best plan?",
+      c:[["Review one chapter a day and use the last evening for a practice test.","Perfect. Small steps and practice reduce stress.",true],
+         ["Read all 5 chapters the night before.","Too much in one night. You will forget a lot.",false],
+         ["Skip chapters you think are boring.","Skipping topics can cost points.",false]]},
+  qz:[{q:"When should you start studying for an exam?",o:["A week or more early","The morning of","After the exam","Never"],a:0,e:"Starting early lets you review in small steps."},
+      {q:"What is a practice test useful for?",o:["Finding weak topics","Wasting time","Replacing the exam","Nothing"],a:0,e:"Practice tests show what you still need to study."},
+      {q:"How much sleep is recommended before an exam?",o:["7–8 hours","2 hours","None","12 hours"],a:0,e:"Sleep helps memory and focus."},
+      {q:"What should you bring to an exam?",o:["Required items like ID and pencils","Nothing","Only your phone","Other students' notes"],a:0,e:"Check the exam rules and bring what is required."},
+      {q:"If you feel nervous during a test, you can...",o:["Take a slow deep breath","Panic","Leave","Guess everything"],a:0,e:"Slow breathing calms your body and mind."}]},
+
+{ t:"Managing Deadlines", icon:"📅",
+  intro:"Deadlines pile up fast. Read each syllabus, list every due date, and break big assignments into smaller steps.",
+  tips:["Copy all syllabus due dates into your calendar in week one.","Split big tasks into small steps with their own dates.","Turn in work early when you can; technology can fail."],
+  ex:"Priya has a 6-page paper due in two weeks. She sets mini deadlines: topic, outline, first draft, edit, and submit one day early.",
+  sc:{q:"You have three assignments due this week: a 1-page reflection (Wed), a quiz (Thu), and a big report (Fri). What do you do first?",
+      c:[["Start the report only on Thursday night.","Too late. A big task needs several days.",false],
+         ["List the deadlines, start the report outline today, and do the reflection by Tuesday.","Great! You split the work and respected each due date.",true],
+         ["Ignore everything until Wednesday.","Waiting creates stress and rushed work.",false]]},
+  qz:[{q:"Where can you find all due dates for a course?",o:["The syllabus","A random website","Your friend's memory","Nowhere"],a:0,e:"The syllabus lists major dates and policies."},
+      {q:"What should you do with a big assignment?",o:["Break it into smaller steps","Ignore it","Do it at the last minute","Skip it"],a:0,e:"Small steps feel easier and reduce stress."},
+      {q:"Why submit work a little early?",o:["Computers can fail or internet may drop","To look fancy","It is not needed","Teachers dislike it"],a:0,e:"Extra time protects you from technical problems."},
+      {q:"What should you do if you will miss a deadline?",o:["Contact your instructor early","Say nothing","Blame others","Disappear"],a:0,e:"Early communication shows responsibility."},
+      {q:"A calendar reminder helps you...",o:["Remember due dates","Avoid classes","Forget tasks","Waste time"],a:0,e:"Reminders keep deadlines visible."}]},
+
+{ t:"Asking for Help", icon:"🙋",
+  intro:"Everyone needs help sometimes. Asking early, clearly, and politely helps you learn faster and prevents bigger problems.",
+  tips:["Ask as soon as you are confused, not after the test.","Explain what you already tried.","Use office hours; professors expect questions."],
+  ex:"Elena did not understand a math problem. At office hours she said, 'I tried steps 1 and 2 but got stuck at step 3.' Her professor helped in five minutes.",
+  sc:{q:"You do not understand today's lecture. What is the best action?",
+      c:[["Say nothing and hope it gets easier.","Confusion usually grows if you wait.",false],
+         ["Go to office hours with specific questions.","Correct! Specific questions get the best help.",true],
+         ["Copy a friend's homework.","That is academic dishonesty and will not help you learn.",false]]},
+  qz:[{q:"When should you ask for help?",o:["As soon as you are confused","Never","After you fail","Only in the final week"],a:0,e:"Early help stops small problems from growing."},
+      {q:"What are office hours?",o:["Times professors meet students","Library hours","Lunch breaks","Closed times"],a:0,e:"Office hours are set times for student questions."},
+      {q:"What makes a good question?",o:["It explains what you tried","It is vague","It is rude","It is silent"],a:0,e:"Showing what you tried helps the helper guide you."},
+      {q:"Asking for help shows...",o:["You care about learning","Weakness","Failure","Nothing"],a:0,e:"Good students ask questions."},
+      {q:"Who can you ask besides your professor?",o:["Tutors and classmates","No one","Strangers online with your password","Only family"],a:0,e:"Tutors and classmates are great, safe sources of help."}]},
+
+{ t:"Campus Safety", icon:"🛡️",
+  intro:"Most campuses are safe, but smart habits help. Know emergency numbers, stay aware, and look out for your friends.",
+  tips:["Save campus security and emergency numbers in your phone.","Walk with friends at night or use a campus escort service.","Lock your room and keep valuables out of sight."],
+  ex:"Chris leaves the library at 10 PM. He texts a friend, walks on well-lit paths, and calls the campus escort service for the last part.",
+  sc:{q:"It is late and you must walk across campus alone. What is the safest choice?",
+      c:[["Use headphones on loud and look at your phone.","This makes you less aware of your surroundings.",false],
+         ["Use a campus escort or walk with a friend on well-lit paths.","Correct! Company and light make you safer.",true],
+         ["Take a dark shortcut to save time.","Dark shortcuts increase risk.",false]]},
+  qz:[{q:"What should you save in your phone?",o:["Campus security number","Nothing","Only games","Old photos"],a:0,e:"Quick access to help matters in an emergency."},
+      {q:"At night it is safest to...",o:["Walk with friends on well-lit paths","Walk alone in the dark","Ignore your surroundings","Take shortcuts"],a:0,e:"Light and company reduce risk."},
+      {q:"What should you do with your room door?",o:["Lock it","Leave it open","Prop it","Remove it"],a:0,e:"Locking doors prevents theft."},
+      {q:"If you see something suspicious, you should...",o:["Report it to campus security","Ignore it","Post about it only","Follow the person"],a:0,e:"Security staff are trained to respond."},
+      {q:"What is the US emergency number?",o:["911","411","311","000"],a:0,e:"911 is the emergency number in the United States."}]}
+];
+
+/* ===== STATE ===== */
+const KEY = "collegeSurvivalGuide";
+let progress = loadProgress();          // {done:[], best:[]}
+let curLevel = 0;                       // index of level being played
+let curQ = 0, score = 0, answered = false;
+
+/* ===== SAVE / LOAD ===== */
+function loadProgress() {
+  try {
+    const s = JSON.parse(localStorage.getItem(KEY));
+    if (s && s.done && s.best) return s;
+  } catch (e) {}
+  return { done: Array(10).fill(false), best: Array(10).fill(0) };
+}
+function saveProgress() {
+  try { localStorage.setItem(KEY, JSON.stringify(progress)); } catch (e) {}
+}
+function resetProgress() {
+  if (!confirm("Erase all saved progress? This cannot be undone.")) return;
+  progress = { done: Array(10).fill(false), best: Array(10).fill(0) };
+  saveProgress();
+  showMap();
+}
+
+/* ===== HELPERS ===== */
+const $ = id => document.getElementById(id);
+const isUnlocked = i => i === 0 || progress.done[i - 1];
+const doneCount = () => progress.done.filter(Boolean).length;
+const currentIndex = () => { const i = progress.done.indexOf(false); return i === -1 ? 9 : i; };
+
+function showScreen(id) {
+  document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+  $(id).classList.add("active");
+  window.scrollTo(0, 0);
+}
+
+/* ===== HEADER STATS ===== */
+function updateHeader() {
+  const n = doneCount();
+  $("curLevel").textContent = n === 10 ? "All done!" : currentIndex() + 1;
+  $("doneCount").textContent = n;
+  $("progressFill").style.width = n * 10 + "%";
+  $("progressBar").setAttribute("aria-valuenow", n * 10);
+}
+
+/* ===== MAP ===== */
+const XS = [50, 74, 50, 26];  // left/center/right positions in percent, repeats
+const ROW = 100, TOP = 70;
+
+function pos(i) {            // where level i goes on the map (level 1 is at the bottom)
+  const H = 10 * ROW + 40;
+  return { x: XS[i % 4], y: H - TOP - i * ROW, H };
+}
+
+function showMap() {
+  updateHeader();
+  const map = $("map");
+  const H = 10 * ROW + 40;
+  map.style.height = H + "px";
+  map.innerHTML = '<svg id="path"></svg>';
+  const cur = currentIndex();
+  LEVELS.forEach((L, i) => {
+    const p = pos(i);
+    const unlocked = isUnlocked(i);
+    const b = document.createElement("button");
+    b.className = "level " + (progress.done[i] ? "done" : unlocked && i === cur ? "current" : unlocked ? "current" : "locked");
+    b.style.left = p.x + "%";
+    b.style.top = p.y + "px";
+    b.disabled = !unlocked;
+    b.innerHTML = progress.done[i] ? "✓<small>" + (i + 1) + "</small>" : unlocked ? (i === 9 ? "🏆" : i + 1) : "🔒<small>" + (i + 1) + "</small>";
+    b.setAttribute("aria-label", "Level " + (i + 1) + ": " + L.t + (progress.done[i] ? ", completed" : unlocked ? ", unlocked" : ", locked"));
+    if (unlocked) {
+      b.title = L.t;
+      b.onmouseenter = b.onfocus = () => { $("hint").textContent = "Level " + (i + 1) + ": " + L.t; };
+      b.onclick = () => { $("hint").textContent = "Level " + (i + 1) + ": " + L.t; openLesson(i); };
+    } else {
+      b.title = "Locked – finish Level " + i + " first";
+      b.onmouseenter = () => { $("hint").textContent = "Locked – complete Level " + i + " first."; };
+    }
+    map.appendChild(b);
+    const lb = document.createElement("div");
+    lb.className = "lbl";
+    lb.style.left = p.x + "%";
+    lb.style.top = (p.y + 42) + "px";
+    lb.textContent = L.t;
+    map.appendChild(lb);
+  });
+  showScreen("mapScreen");   // show the map first, so it has a real width
+  drawPath();                // then draw the ladder (needs the width)
+}
+
+// draws a little ladder (2 rails + rungs) from each level to the next one.
+// the ladder turns green once the lower level is finished
+function drawPath() {
+  const map = $("map"), svg = $("path");
+  if (!svg) return;
+  const w = map.clientWidth, H = 10 * ROW + 40;
+  svg.setAttribute("viewBox", "0 0 " + w + " " + H);
+  const steps = 12, gap = 13;   // gap = half the width of the ladder
+  let out = "";
+  for (let i = 1; i < 10; i++) {
+    const a = pos(i - 1), b = pos(i);
+    const x1 = a.x / 100 * w, y1 = a.y, x2 = b.x / 100 * w, y2 = b.y;
+    const my = (y1 + y2) / 2;
+    const color = progress.done[i - 1] ? "#25b058" : "#c58a4a";
+    let left = "", right = "", rungs = "";
+    for (let s = 0; s <= steps; s++) {
+      const t = s / steps, u = 1 - t;
+      // point on the curve (bezier formula)
+      const x = u*u*u*x1 + 3*u*u*t*x1 + 3*u*t*t*x2 + t*t*t*x2;
+      const y = u*u*u*y1 + 3*u*u*t*my + 3*u*t*t*my + t*t*t*y2;
+      // direction of the curve, so we can move sideways for the 2 rails
+      const dx = 6*u*t*(x2 - x1);
+      const dy = 3*u*u*(my - y1) + 3*t*t*(y2 - my);
+      const len = Math.sqrt(dx*dx + dy*dy) || 1;
+      const nx = -dy / len * gap, ny = dx / len * gap;
+      const lx = (x + nx).toFixed(1), ly = (y + ny).toFixed(1);
+      const rx = (x - nx).toFixed(1), ry = (y - ny).toFixed(1);
+      left  += (s === 0 ? "M" : "L") + lx + " " + ly + " ";
+      right += (s === 0 ? "M" : "L") + rx + " " + ry + " ";
+      if (s > 0 && s < steps) rungs += "M" + lx + " " + ly + " L" + rx + " " + ry + " ";
+    }
+    out += '<path d="' + rungs + '" stroke="' + color + '" stroke-width="4" stroke-linecap="round" fill="none"/>' +
+           '<path d="' + left + '" stroke="' + color + '" stroke-width="5" stroke-linecap="round" fill="none"/>' +
+           '<path d="' + right + '" stroke="' + color + '" stroke-width="5" stroke-linecap="round" fill="none"/>';
+  }
+  svg.innerHTML = out;
+}
+window.addEventListener("resize", drawPath);
+
+/* ===== LESSON ===== */
+function openLesson(i) {
+  curLevel = i;
+  const L = LEVELS[i];
+  const best = progress.best[i] ? " · Best score: " + progress.best[i] + "/5" : "";
+  $("lessonScreen").innerHTML =
+    '<div class="panel"><h2>' + L.icon + " Level " + (i + 1) + ": " + L.t + "</h2>" +
+    "<p><small>" + (progress.done[i] ? "Completed ✓" : "Not completed yet") + best + "</small></p>" +
+    "<p>" + L.intro + "</p>" +
+    "<h3>Three Useful Tips</h3><ul class='tip-list'>" + L.tips.map(t => "<li>" + t + "</li>").join("") + "</ul>" +
+    "<h3>Real College Example</h3><div class='example'>" + L.ex + "</div></div>" +
+    "<div class='panel'><h3>Try It: Scenario</h3><p>" + L.sc.q + "</p><div id='scChoices'></div><div id='scFeedback' aria-live='polite'></div></div>" +
+    "<button class='btn' id='startQuiz'>Start Quiz</button><button class='btn alt' id='backMap'>Back to Map</button>";
+  // scenario choices
+  L.sc.c.forEach(ch => {
+    const b = document.createElement("button");
+    b.className = "choice";
+    b.textContent = ch[0];
+    b.onclick = () => {
+      const f = $("scFeedback");
+      f.className = "feedback " + (ch[2] ? "good" : "bad");
+      f.textContent = (ch[2] ? "✅ Best choice! " : "❌ Not the best choice. ") + ch[1];
+    };
+    $("scChoices").appendChild(b);
+  });
+  $("startQuiz").onclick = startQuiz;
+  $("backMap").onclick = showMap;
+  showScreen("lessonScreen");
+}
+
+/* ===== QUIZ ===== */
+function startQuiz() { curQ = 0; score = 0; showQuestion(); showScreen("quizScreen"); }
+
+function showQuestion() {
+  const L = LEVELS[curLevel], Q = L.qz[curQ];
+  answered = false;
+  $("quizScreen").innerHTML =
+    "<div class='panel'><p><b>Level " + (curLevel + 1) + ": " + L.t + "</b> · Question " + (curQ + 1) + " of 5 · Score: " + score + "</p>" +
+    "<h3>" + Q.q + "</h3><div id='choices'></div><div id='qFeedback' aria-live='polite'></div><div id='nextArea'></div></div>" +
+    "<button class='btn alt' id='quitQuiz'>Back to Lesson</button>";
+  Q.o.forEach((opt, k) => {
+    const b = document.createElement("button");
+    b.className = "choice";
+    b.textContent = String.fromCharCode(65 + k) + ". " + opt;
+    b.onclick = () => checkAnswer(k);
+    $("choices").appendChild(b);
+  });
+  $("quitQuiz").onclick = () => { if (confirm("Leave the quiz? Your current answers will be lost.")) openLesson(curLevel); };
+}
+
+function checkAnswer(k) {
+  if (answered) return;                 // so you cannot click twice
+  answered = true;
+  const Q = LEVELS[curLevel].qz[curQ];
+  const btns = document.querySelectorAll("#choices .choice");
+  btns.forEach((b, j) => {
+    b.disabled = true;
+    if (j === Q.a) b.classList.add("right");
+    else if (j === k) b.classList.add("wrong");
+  });
+  const ok = k === Q.a;
+  if (ok) score++;
+  const f = $("qFeedback");
+  f.className = "feedback " + (ok ? "good" : "bad");
+  f.textContent = (ok ? "✅ Correct! " : "❌ Incorrect. ") + Q.e;
+  const next = document.createElement("button");
+  next.className = "btn";
+  next.textContent = curQ === 4 ? "See My Score" : "Next Question";
+  next.onclick = () => { if (curQ === 4) showResult(); else { curQ++; showQuestion(); } };
+  $("nextArea").appendChild(next);
+  next.focus();
+}
+
+/* ===== RESULT ===== */
+function showResult() {
+  const pct = score / 5 * 100;
+  const passed = pct >= 60;
+  if (score > progress.best[curLevel]) progress.best[curLevel] = score;
+  if (passed) progress.done[curLevel] = true;
+  saveProgress();
+  updateHeader();
+  const allDone = doneCount() === 10;
+  let html = "<div class='panel'><h2>Your Score: " + score + " / 5 (" + pct + "%)</h2>";
+  if (passed) {
+    html += "<p><b>Great job! Level completed." + (curLevel < 9 ? " Next level unlocked!" : "") + "</b></p></div>";
+    if (allDone) html += "<button class='btn' id='contBtn'>Finish the Guide</button>";
+    else if (curLevel < 9) html += "<button class='btn' id='contBtn'>Continue to Next Level</button>";
+    html += "<button class='btn alt' id='retryBtn'>Replay Quiz</button>";
+  } else {
+    html += "<p><b>Good try! Review the lesson and try again.</b></p><p>You need at least 60% (3 of 5) to pass.</p></div>";
+    html += "<button class='btn' id='retryBtn'>Retry Quiz</button><button class='btn alt' id='lessonBtn'>Review Lesson</button>";
+  }
+  html += "<button class='btn alt' id='mapBtn'>Back to Map</button>";
+  $("resultScreen").innerHTML = html;
+  if ($("contBtn")) $("contBtn").onclick = () => allDone ? showChampion() : openLesson(curLevel + 1);
+  if ($("retryBtn")) $("retryBtn").onclick = startQuiz;
+  if ($("lessonBtn")) $("lessonBtn").onclick = () => openLesson(curLevel);
+  $("mapBtn").onclick = showMap;
+  showScreen("resultScreen");
+}
+
+/* ===== CHAMPION ===== */
+function showChampion() {
+  $("champCount").textContent = doneCount();
+  showScreen("champScreen");
+}
+$("playAgainBtn").onclick = resetProgress;
+$("champMapBtn").onclick = showMap;
+$("resetBtn").onclick = resetProgress;
+
+/* ===== START ===== */
+showMap();
+</script>
+</body>
+</html>
